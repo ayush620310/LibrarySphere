@@ -18,19 +18,34 @@ const configuredOrigins = (process.env.FRONTEND_URL || '')
 
 const allowedOrigins = [
   ...configuredOrigins,
+  'https://library-sphere-suz9.vercel.app',
+  'https://library-management-system-cwup.vercel.app',
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:3000',
 ];
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  const clean = origin.trim().replace(/\/$/, '');
+  if (allowedOrigins.includes(clean)) return true;
+  // Automatically allow all Vercel deployments (*.vercel.app)
+  if (clean.endsWith('.vercel.app')) return true;
+  // Allow any localhost port
+  if (/^http:\/\/localhost(:\d+)?$/.test(clean)) return true;
+  return false;
+};
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
+    return callback(null, false);
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-skip-auth', 'x-skip-logout', 'x-library-id'],
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -41,7 +56,12 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 const rateLimit = require('express-rate-limit');
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: 'Too many attempts, try again later.' } });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  skip: (req) => req.method === 'OPTIONS',
+  message: { success: false, message: 'Too many attempts, try again later.' },
+});
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 
